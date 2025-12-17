@@ -154,8 +154,8 @@ def parse_arguments():
     parser.add_argument(
         "--thinking-start-token",
         type=str,
-        default="<think>",
-        help="Token string that marks the start of a thinking block.",
+        default=None,
+        help="Token string that marks the start of a thinking block. If None, assume thinking starts immediately.",
     )
     parser.add_argument(
         "--thinking-end-token",
@@ -378,16 +378,26 @@ def generate_step(
     in_thinking = False
     thinking_token_count = 0
 
-    # Check if the first token (y from initial forward pass) is <think>
-    if (
-        thinking_budget is not None
-        and thinking_end_token_id is not None
-        and thinking_start_token_id is not None
-    ):
-        first_token_id = y.item()
-        if first_token_id == thinking_start_token_id:
+    # Determine initial thinking state
+    if thinking_budget is not None and thinking_end_token_id is not None:
+        if thinking_start_token_id is None:
+            # No start token specified - assume we start thinking immediately
             in_thinking = True
-            thinking_token_count = 0
+        else:
+            # Check if the first token is the thinking start token
+            first_token_id = y.item()
+            if first_token_id == thinking_start_token_id:
+                in_thinking = True
+            else:
+                # Warn user that expected start token was not found
+                import warnings
+
+                warnings.warn(
+                    f"thinking_budget is set but first generated token ({first_token_id}) "
+                    f"does not match thinking_start_token_id ({thinking_start_token_id}). "
+                    "Budget enforcement will not be applied. "
+                    "Set thinking_start_token=None to assume implicit thinking mode."
+                )
 
     n = 0
     while True:
@@ -433,7 +443,7 @@ def stream_generate(
     image: Union[str, List[str]] = None,
     audio: Union[str, List[str]] = None,
     thinking_budget: Optional[int] = None,
-    thinking_start_token: str = "<think>",
+    thinking_start_token: Optional[str] = None,
     thinking_end_token: str = "</think>",
     **kwargs,
 ) -> Union[str, Generator[str, None, None]]:
@@ -446,8 +456,9 @@ def stream_generate(
         max_tokens (int): The ma
         thinking_budget (int, optional): Maximum number of tokens allowed in
           thinking blocks. When exceeded, the thinking_end_token is force-inserted.
-        thinking_start_token (str): Token string that marks the start of a
-          thinking block. Default: "<think>".
+        thinking_start_token (str, optional): Token string that marks the start of a
+          thinking block. If None (default), assumes thinking starts immediately
+          when thinking_budget is set.
         thinking_end_token (str): Token string that marks the end of a
           thinking block. Default: "</think>".
         kwargs: The remaining options get passed to :func:`generate_step`.
@@ -462,9 +473,10 @@ def stream_generate(
     thinking_start_token_id = None
     thinking_end_token_id = None
     if thinking_budget is not None:
-        thinking_start_token_id = tokenizer.encode(
-            thinking_start_token, add_special_tokens=False
-        )[-1]
+        if thinking_start_token is not None:
+            thinking_start_token_id = tokenizer.encode(
+                thinking_start_token, add_special_tokens=False
+            )[-1]
         thinking_end_token_id = tokenizer.encode(
             thinking_end_token, add_special_tokens=False
         )[-1]
@@ -576,7 +588,7 @@ def generate(
     audio: Union[str, List[str]] = None,
     verbose: bool = False,
     thinking_budget: Optional[int] = None,
-    thinking_start_token: str = "<think>",
+    thinking_start_token: Optional[str] = None,
     thinking_end_token: str = "</think>",
     **kwargs,
 ) -> GenerationResult:
@@ -597,8 +609,9 @@ def generate(
        repetition_context_size (int, optional): The number of tokens to consider for repetition penalty.
        thinking_budget (int, optional): Maximum number of tokens allowed in
            thinking blocks. When exceeded, the thinking_end_token is force-inserted.
-       thinking_start_token (str): Token string that marks the start of a
-           thinking block. Default: "<think>".
+       thinking_start_token (str, optional): Token string that marks the start of a
+           thinking block. If None (default), assumes thinking starts immediately
+           when thinking_budget is set.
        thinking_end_token (str): Token string that marks the end of a
            thinking block. Default: "</think>".
     """
