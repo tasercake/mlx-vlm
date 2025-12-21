@@ -419,6 +419,15 @@ def generate_step(
                             next_y = mx.array([thinking_end_token_id])
                             # TODO: Consider gradually boosting thinking_end_token
                             # probability as budget approaches instead of hard cutoff
+                            # Update logprobs to reflect forced token selection
+                            next_logprobs = mx.full(
+                                next_logprobs.shape,
+                                -float("inf"),
+                                dtype=next_logprobs.dtype,
+                            )
+                            next_logprobs = next_logprobs.at[
+                                thinking_end_token_id
+                            ].set(0.0)
                             in_thinking = False
 
             mx.async_eval(next_y)
@@ -1061,6 +1070,7 @@ class BatchGenerator:
 
         # Apply thinking budget enforcement
         tokens_modified = False
+        modified_indices: List[int] = []
         if (
             self.thinking_budget is not None
             and self.thinking_end_token_id is not None
@@ -1077,10 +1087,22 @@ class BatchGenerator:
                             y[e] = self.thinking_end_token_id
                             batch.in_thinking[e] = False
                             tokens_modified = True
+                            modified_indices.append(e)
 
-            # Update batch.y if any tokens were modified
+            # Update batch.y and logprobs if any tokens were modified
             if tokens_modified:
                 batch.y = mx.array(y)
+                # Update logprobs for forced tokens
+                for idx in modified_indices:
+                    forced_logprobs = mx.full(
+                        logprobs[idx].shape,
+                        -float("inf"),
+                        dtype=logprobs.dtype,
+                    )
+                    forced_logprobs = forced_logprobs.at[
+                        self.thinking_end_token_id
+                    ].set(0.0)
+                    logprobs = logprobs.at[idx].set(forced_logprobs)
 
         toc = time.perf_counter()
         if prompt_processing:
