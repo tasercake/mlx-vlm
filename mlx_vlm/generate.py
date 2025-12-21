@@ -842,8 +842,10 @@ class Batch:
         self.uids = [self.uids[k] for k in keep_idx]
         self.max_tokens = [self.max_tokens[k] for k in keep_idx]
         self.num_tokens = [self.num_tokens[k] for k in keep_idx]
-        self.in_thinking = [self.in_thinking[k] for k in keep_idx]
-        self.thinking_token_count = [self.thinking_token_count[k] for k in keep_idx]
+        if self.in_thinking is not None:
+            self.in_thinking = [self.in_thinking[k] for k in keep_idx]
+        if self.thinking_token_count is not None:
+            self.thinking_token_count = [self.thinking_token_count[k] for k in keep_idx]
         keep_idx = mx.array(keep_idx, mx.int32)
         self.y = self.y[keep_idx]
         self.logprobs = self.logprobs[keep_idx]
@@ -856,8 +858,10 @@ class Batch:
         self.logprobs = mx.concatenate([self.logprobs, other.logprobs])
         self.num_tokens.extend(other.num_tokens)
         self.max_tokens.extend(other.max_tokens)
-        self.in_thinking.extend(other.in_thinking)
-        self.thinking_token_count.extend(other.thinking_token_count)
+        if self.in_thinking is not None and other.in_thinking is not None:
+            self.in_thinking.extend(other.in_thinking)
+        if self.thinking_token_count is not None and other.thinking_token_count is not None:
+            self.thinking_token_count.extend(other.thinking_token_count)
         for c, o in zip(self.cache, other.cache):
             c.extend(o)
 
